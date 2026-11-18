@@ -2,13 +2,17 @@
 
 Painel web para cadastro de alunos, valor individual e baixa manual de pagamentos.
 
-## Publicação
+## Publicação (obrigatório)
 
-Publique **somente** como app **private** ou **team** no Cursor (nunca public). Admins entram com a conta Cursor.
+Publique **somente** como app **private** ou **team** no Cursor (**nunca public**).
 
-1. Confirme a publicação e aceite os termos.
-2. Defina o segredo `CTR_ADMIN_EMAILS` com os e-mails Cursor dos admins (separados por vírgula), por exemplo `voce@email.com,outro@email.com`.
-3. O Postgres da app é provisionado automaticamente (`cursor-app.json`). Preview usa dados isolados; produção usa o Postgres da app.
+Em app **public**, o Cursor **não envia** a identidade da pessoa logada — `/painel` não consegue autorizar ninguém e redireciona para a home.
+
+1. Publish Settings → visibilidade **private** ou **team**.
+2. Segredo `CTR_ADMIN_EMAILS`: e-mails Cursor dos admins (vírgula), ex. `voce@email.com,outro@email.com`.
+3. Abra o app logado na conta Cursor cujo e-mail está na lista → `/painel`.
+
+O Postgres da app é provisionado automaticamente (`cursor-app.json`). Preview usa dados isolados; produção usa o Postgres da app.
 
 ## Local
 

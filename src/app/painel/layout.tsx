@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { PainelNav } from "../../components/painel-nav";
-import { getAdmin } from "../../lib/auth";
+import { getAccessState } from "../../lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,16 +9,16 @@ export default async function PainelLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const identity = await getAdmin();
-  if (!identity.verified) {
-    redirect("/");
+  const access = await getAccessState();
+  if (access.status !== "ok") {
+    redirect(`/?acesso=${encodeURIComponent(access.code)}`);
   }
 
   return (
     <div className="min-h-screen">
       <PainelNav
-        adminName={identity.name || identity.email || "Admin"}
-        simulated={identity.simulated === true}
+        adminName={access.identity.name || access.identity.email || "Admin"}
+        simulated={access.identity.simulated === true}
       />
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</div>
     </div>

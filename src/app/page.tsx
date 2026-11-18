@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { getAdmin } from "../lib/auth";
+import { getAccessState } from "../lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const identity = await getAdmin();
-  const signedIn = identity.verified;
+  const access = await getAccessState();
+  const signedIn = access.status === "ok";
 
   return (
     <main className="min-h-screen">
@@ -15,14 +15,14 @@ export default async function HomePage() {
         <div className="pointer-events-none absolute right-0 top-10 h-72 w-72 rounded-full bg-fern/20 blur-3xl" />
 
         <div className="relative mx-auto flex min-h-[100svh] max-w-6xl flex-col justify-between px-6 py-8 sm:px-10 sm:py-10">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sand/90">
               Assessoria de corrida
             </p>
             {signedIn ? (
               <p className="text-xs text-sand/80">
-                {identity.name || identity.email}
-                {identity.simulated ? " · simulado" : ""}
+                {access.identity.name || access.identity.email}
+                {access.identity.simulated ? " · simulado" : ""}
               </p>
             ) : (
               <p className="text-xs text-sand/80">Acesso para admins</p>
@@ -40,6 +40,24 @@ export default async function HomePage() {
               Controle de alunos, valores individuais e pagamentos manuais —
               acesso restrito a admins (app private ou team no Cursor).
             </p>
+
+            {access.status === "blocked" ? (
+              <div className="animate-rise-delay mt-6 max-w-lg border border-amber/50 bg-black/35 px-4 py-3 text-sm leading-relaxed text-sand">
+                <p className="font-semibold uppercase tracking-[0.12em] text-amber">
+                  Painel bloqueado
+                </p>
+                <p className="mt-2 text-white/90">{access.message}</p>
+                {access.code === "needs_private_or_team" ? (
+                  <p className="mt-2 text-white/75">
+                    Em Cursor: abra o app → Publish Settings → visibilidade{" "}
+                    <strong>private</strong> ou <strong>team</strong>. Depois
+                    entre de novo em /painel com a conta Cursor cujo e-mail está
+                    em CTR_ADMIN_EMAILS.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="animate-rise-delay mt-8 flex flex-wrap gap-3">
               <Link
                 href="/painel"
