@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PanelLoginForm } from "../components/panel-login-form";
 import { getAccessState } from "../lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,9 @@ export default async function HomePage() {
             </p>
             {signedIn ? (
               <p className="text-xs text-sand/80">
-                {access.identity.name || access.identity.email}
+                {access.identity.name || access.identity.email || "Admin"}
                 {access.identity.simulated ? " · simulado" : ""}
+                {access.identity.via === "password" ? " · senha" : ""}
               </p>
             ) : (
               <p className="text-xs text-sand/80">Acesso para admins</p>
@@ -38,39 +40,43 @@ export default async function HomePage() {
             </h1>
             <p className="animate-rise-delay mt-5 max-w-md text-base leading-relaxed text-white/85 sm:text-lg">
               Controle de alunos, valores individuais e pagamentos manuais —
-              acesso restrito a admins (app private ou team no Cursor).
+              painel com senha compartilhada (não precisa de conta Cursor).
             </p>
 
-            {access.status === "blocked" ? (
-              <div className="animate-rise-delay mt-6 max-w-lg border border-amber/50 bg-black/35 px-4 py-3 text-sm leading-relaxed text-sand">
-                <p className="font-semibold uppercase tracking-[0.12em] text-amber">
-                  Painel bloqueado
-                </p>
-                <p className="mt-2 text-white/90">{access.message}</p>
-                {access.code === "needs_private_or_team" ? (
-                  <p className="mt-2 text-white/75">
-                    Em Cursor: abra o app → Publish Settings → visibilidade{" "}
-                    <strong>private</strong> ou <strong>team</strong>. Depois
-                    abra /painel logado na conta Cursor.
-                  </p>
-                ) : null}
+            {signedIn ? (
+              <div className="animate-rise-delay mt-8 flex flex-wrap gap-3">
+                <Link
+                  href="/painel"
+                  className="bg-amber px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-trail transition hover:bg-sand"
+                >
+                  Entrar no painel
+                </Link>
+                <Link
+                  href="/painel/alunos"
+                  className="border border-white/35 px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-white transition hover:bg-white/10"
+                >
+                  Ver alunos
+                </Link>
               </div>
-            ) : null}
-
-            <div className="animate-rise-delay mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/painel"
-                className="bg-amber px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-trail transition hover:bg-sand"
-              >
-                Entrar no painel
-              </Link>
-              <Link
-                href="/painel/alunos"
-                className="border border-white/35 px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-white transition hover:bg-white/10"
-              >
-                Ver alunos
-              </Link>
-            </div>
+            ) : (
+              <div className="animate-rise-delay mt-6 max-w-md">
+                <p className="text-sm font-semibold uppercase tracking-[0.12em] text-amber">
+                  Login do painel
+                </p>
+                <p className="mt-2 text-sm text-white/80">
+                  Use a senha compartilhada dos admins. No Cursor, o app deve
+                  estar <strong>public</strong> para quem não tem conta Cursor
+                  abrir o link.
+                </p>
+                {access.status === "blocked" && access.code === "password_unset" ? (
+                  <p className="mt-3 border border-amber/40 bg-black/35 px-3 py-2 text-sm text-sand">
+                    {access.message}
+                  </p>
+                ) : (
+                  <PanelLoginForm />
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 border-t border-white/15 pt-5 text-xs uppercase tracking-[0.18em] text-sand/75 sm:flex-row sm:items-center sm:justify-between">

@@ -1,19 +1,30 @@
 import { headers } from "next/headers";
 import {
   getIdentity,
-  requireIdentity,
   type Identity,
   type PersonIdentity,
 } from "../../cursor/identity";
 import { dataScopeForIdentityStage, enterDataScope } from "./db";
+import {
+  isPanelPasswordConfigured,
+  readPasswordSessionFromCookies,
+  readSessionFromRequest,
+} from "./session";
 
-export type AdminIdentity = PersonIdentity;
+export type AdminSession = {
+  sub: string;
+  name: string;
+  email: string;
+  simulated: boolean;
+  stage: "production" | "preview";
+  via: "cursor" | "password";
+};
 
 export type AccessState =
-  | { status: "ok"; identity: AdminIdentity }
+  | { status: "ok"; identity: AdminSession }
   | {
       status: "blocked";
-      code: "needs_private_or_team" | "not_signed_in" | "api_key";
+      code: "needs_password" | "not_signed_in" | "api_key" | "password_unset";
       message: string;
     };
 
@@ -24,89 +35,127 @@ function forbidden(message: string): Response {
   );
 }
 
-/**
- * Any signed-in Cursor person on a private or team app may use the panel.
- * Who can open the app is decided by Cursor visibility (invite/team), not by
- * an email allowlist. Public apps never receive person identity headers.
- */
-export function isDesignatedAdmin(identity: PersonIdentity): boolean {
+function unauthorized(message: string): Response {
+  return Response.json(
+    { error: message },
+    { status: 401, headers: { "cache-control": "private, no-store" } },
+  );
+}
+
+function fromCursor(identity: PersonIdentity): AdminSession {
+  return {
+    sub: identity.sub,
+    name: identity.name,
+    email: identity.email,
+    simulated: identity.simulated,
+    stage: identity.stage,
+    via: "cursor",
+  };
+}
+
+function fromPassword(name: string): AdminSession {
+  return {
+    sub: "password-admin",
+    name,
+    email: "",
+    simulated: false,
+    stage: "production",
+    via: "password",
+  };
+}
+
+function bindDataScope(session: AdminSession): void {
+  enterDataScope(dataScopeForIdentityStage(session.stage));
+}
+
+function isCursorAdmin(identity: PersonIdentity): boolean {
   return (
     identity.appVisibility === "private" || identity.appVisibility === "team"
   );
 }
 
-function bindDataScope(identity: AdminIdentity): void {
-  enterDataScope(dataScopeForIdentityStage(identity.stage));
-}
-
 export async function getAccessState(): Promise<AccessState> {
   const identity = await getIdentity(await requestFromHeaders());
 
-  if (!identity.verified) {
-    const hosted = Boolean(process.env.CURSOR_APP_ID?.trim());
-    if (hosted && identity.reason === "missing_header") {
-      return {
-        status: "blocked",
-        code: "needs_private_or_team",
-        message:
-          "O app está público: o Cursor não envia login de pessoa. Mude a visibilidade para private ou team nas Publish Settings.",
-      };
-    }
-    return {
-      status: "blocked",
-      code: "not_signed_in",
-      message: "Faça login com sua conta Cursor para abrir o painel.",
-    };
-  }
-
-  if (identity.kind === "key") {
+  if (identity.verified && identity.kind === "key") {
     return {
       status: "blocked",
       code: "api_key",
-      message: "Acesso reservado a administradores com login Cursor.",
+      message: "Acesso reservado a administradores.",
     };
   }
 
-  if (!isDesignatedAdmin(identity)) {
+  if (identity.verified && identity.kind === "person" && isCursorAdmin(identity)) {
+    const session = fromCursor(identity);
+    bindDataScope(session);
+    return { status: "ok", identity: session };
+  }
+
+  const passwordSession = await readPasswordSessionFromCookies();
+  if (passwordSession) {
+    const session = fromPassword(passwordSession.name);
+    bindDataScope(session);
+    return { status: "ok", identity: session };
+  }
+
+  if (!isPanelPasswordConfigured()) {
     return {
       status: "blocked",
-      code: "needs_private_or_team",
+      code: "password_unset",
       message:
-        "Este app precisa ser private ou team para o painel de admins funcionar.",
+        "Configure a senha do painel (CTR_PANEL_PASSWORD) nos Secrets do Cursor para admins sem conta Cursor.",
     };
   }
 
-  bindDataScope(identity);
-  return { status: "ok", identity };
+  return {
+    status: "blocked",
+    code: "needs_password",
+    message: "Entre com a senha do painel para continuar.",
+  };
 }
 
 export async function requireAdmin(
   request?: Request,
-): Promise<AdminIdentity | Response> {
-  const identity = await requireIdentity(request ?? (await requestFromHeaders()));
-  if (identity instanceof Response) {
-    const hosted = Boolean(process.env.CURSOR_APP_ID?.trim());
-    if (hosted) {
-      return forbidden(
-        "O app precisa ser private ou team (com login Cursor) para autorizar admins. Apps públicos não recebem identidade de pessoa.",
-      );
-    }
-    return identity;
+): Promise<AdminSession | Response> {
+  const req = request ?? (await requestFromHeaders());
+
+  const identity = await getIdentity(req);
+  if (identity.verified && identity.kind === "key") {
+    return forbidden("Acesso reservado a administradores.");
   }
-  if (identity.kind === "key") {
-    return forbidden("Acesso reservado a administradores com login Cursor.");
+  if (identity.verified && identity.kind === "person" && isCursorAdmin(identity)) {
+    const session = fromCursor(identity);
+    bindDataScope(session);
+    return session;
   }
-  if (!isDesignatedAdmin(identity)) {
+
+  // Prefer getIdentity over requireIdentity so public apps can use password auth.
+  if (!identity.verified) {
+    // fall through to password
+  } else if (identity.kind === "person" && !isCursorAdmin(identity)) {
+    // public person tokens are unexpected; still allow password cookie
+  }
+
+  const passwordSession = request
+    ? readSessionFromRequest(request)
+    : await readPasswordSessionFromCookies();
+  if (passwordSession) {
+    const session = fromPassword(passwordSession.name);
+    bindDataScope(session);
+    return session;
+  }
+
+  if (!isPanelPasswordConfigured()) {
     return forbidden(
-      "Este app deve ser publicado como private ou team. Acesso público não é permitido.",
+      "Senha do painel não configurada. Defina CTR_PANEL_PASSWORD nos Secrets.",
     );
   }
-  bindDataScope(identity);
-  return identity;
+
+  return unauthorized("Faça login com a senha do painel.");
 }
 
 export async function getAdmin(): Promise<
-  | AdminIdentity
+  | AdminSession
   | { verified: false; reason: string }
 > {
   const access = await getAccessState();
