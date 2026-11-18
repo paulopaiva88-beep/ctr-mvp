@@ -2,7 +2,6 @@ import { headers } from "next/headers";
 import {
   getIdentity,
   requireIdentity,
-  requireTeamRole,
   type Identity,
   type PersonIdentity,
 } from "../../cursor/identity";
@@ -14,21 +13,9 @@ export type AccessState =
   | { status: "ok"; identity: AdminIdentity }
   | {
       status: "blocked";
-      code:
-        | "needs_private_or_team"
-        | "not_on_allowlist"
-        | "not_signed_in"
-        | "api_key"
-        | "not_configured";
+      code: "needs_private_or_team" | "not_signed_in" | "api_key";
       message: string;
     };
-
-function adminEmailAllowlist(): string[] {
-  return (process.env.CTR_ADMIN_EMAILS ?? "")
-    .split(/[,;\n]+/)
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 function forbidden(message: string): Response {
   return Response.json(
@@ -38,47 +25,13 @@ function forbidden(message: string): Response {
 }
 
 /**
- * Only designated CTR admins may use the panel.
- * Primary gate: CTR_ADMIN_EMAILS (comma-separated). Without it, only a
- * simulated local viewer or a Cursor team admin on a team-published app.
- *
- * Person identity headers exist only for private/team apps — a public app
- * never names the viewer, so /painel cannot authorize anyone.
+ * Any signed-in Cursor person on a private or team app may use the panel.
+ * Who can open the app is decided by Cursor visibility (invite/team), not by
+ * an email allowlist. Public apps never receive person identity headers.
  */
 export function isDesignatedAdmin(identity: PersonIdentity): boolean {
-  const allowlist = adminEmailAllowlist();
-  if (allowlist.length > 0) {
-    const email = identity.email.trim().toLowerCase();
-    return identity.emailVerified && email !== "" && allowlist.includes(email);
-  }
-
-  if (identity.simulated) return true;
-
-  return identity.appVisibility === "team" && identity.teamRole === "admin";
-}
-
-function authorizePerson(identity: PersonIdentity): true | Response {
-  const allowlist = adminEmailAllowlist();
-  if (allowlist.length > 0) {
-    const email = identity.email.trim().toLowerCase();
-    if (!identity.emailVerified || email === "" || !allowlist.includes(email)) {
-      return forbidden("Seu usuário Cursor não está na lista de admins da CTR.");
-    }
-    return true;
-  }
-
-  if (identity.simulated) return true;
-
-  if (identity.appVisibility === "team") {
-    const teamAdmin = requireTeamRole(identity, ["admin"]);
-    if (teamAdmin instanceof Response) {
-      return forbidden("Apenas admins designados da CTR podem acessar o painel.");
-    }
-    return true;
-  }
-
-  return forbidden(
-    "Configure o segredo CTR_ADMIN_EMAILS com os e-mails dos admins autorizados.",
+  return (
+    identity.appVisibility === "private" || identity.appVisibility === "team"
   );
 }
 
@@ -90,8 +43,6 @@ export async function getAccessState(): Promise<AccessState> {
   const identity = await getIdentity(await requestFromHeaders());
 
   if (!identity.verified) {
-    // Public apps never send a person identity header — treat as visibility issue
-    // when we are on a hosted app (CURSOR_APP_ID set) rather than local sim.
     const hosted = Boolean(process.env.CURSOR_APP_ID?.trim());
     if (hosted && identity.reason === "missing_header") {
       return {
@@ -116,34 +67,12 @@ export async function getAccessState(): Promise<AccessState> {
     };
   }
 
-  if (
-    identity.appVisibility !== "private" &&
-    identity.appVisibility !== "team"
-  ) {
+  if (!isDesignatedAdmin(identity)) {
     return {
       status: "blocked",
       code: "needs_private_or_team",
       message:
         "Este app precisa ser private ou team para o painel de admins funcionar.",
-    };
-  }
-
-  const allowlist = adminEmailAllowlist();
-  if (allowlist.length > 0) {
-    if (!isDesignatedAdmin(identity)) {
-      return {
-        status: "blocked",
-        code: "not_on_allowlist",
-        message:
-          "Seu e-mail Cursor não está em CTR_ADMIN_EMAILS. Peça para incluir o e-mail da conta Cursor que você usa.",
-      };
-    }
-  } else if (!isDesignatedAdmin(identity)) {
-    return {
-      status: "blocked",
-      code: "not_configured",
-      message:
-        "Configure o segredo CTR_ADMIN_EMAILS com os e-mails dos admins autorizados.",
     };
   }
 
@@ -167,16 +96,11 @@ export async function requireAdmin(
   if (identity.kind === "key") {
     return forbidden("Acesso reservado a administradores com login Cursor.");
   }
-  if (
-    identity.appVisibility !== "private" &&
-    identity.appVisibility !== "team"
-  ) {
+  if (!isDesignatedAdmin(identity)) {
     return forbidden(
       "Este app deve ser publicado como private ou team. Acesso público não é permitido.",
     );
   }
-  const allowed = authorizePerson(identity);
-  if (allowed instanceof Response) return allowed;
   bindDataScope(identity);
   return identity;
 }

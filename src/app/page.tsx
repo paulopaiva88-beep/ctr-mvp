@@ -51,8 +51,7 @@ export default async function HomePage() {
                   <p className="mt-2 text-white/75">
                     Em Cursor: abra o app → Publish Settings → visibilidade{" "}
                     <strong>private</strong> ou <strong>team</strong>. Depois
-                    entre de novo em /painel com a conta Cursor cujo e-mail está
-                    em CTR_ADMIN_EMAILS.
+                    abra /painel logado na conta Cursor.
                   </p>
                 ) : null}
               </div>
