@@ -23,6 +23,8 @@
 # misc
 .DS_Store
 *.pem
+*.zip
+ctr-mvp-source.zip
 
 # debug
 npm-debug.log*

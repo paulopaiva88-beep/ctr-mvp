@@ -13,9 +13,6 @@ export default async function PainelLayout({
   if (!identity.verified) {
     redirect("/");
   }
-  if (identity.kind === "key") {
-    redirect("/");
-  }
 
   return (
     <div className="min-h-screen">

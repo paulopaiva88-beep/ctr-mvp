@@ -38,7 +38,7 @@ export default async function HomePage() {
             </h1>
             <p className="animate-rise-delay mt-5 max-w-md text-base leading-relaxed text-white/85 sm:text-lg">
               Controle de alunos, valores individuais e pagamentos manuais —
-              rua e montanha no mesmo painel.
+              acesso restrito a admins (app private ou team no Cursor).
             </p>
             <div className="animate-rise-delay mt-8 flex flex-wrap gap-3">
               <Link
