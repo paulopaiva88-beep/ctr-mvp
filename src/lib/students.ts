@@ -82,7 +82,7 @@ async function ensureSampleData(): Promise<void> {
         sample.phone,
         sample.email,
         sample.amount,
-        "Dados de exemplo — ambiente local sem Postgres.",
+        "Dados de exemplo — ambiente local ou preview (isolado da produção).",
       ],
     );
     if (sample.paid) {

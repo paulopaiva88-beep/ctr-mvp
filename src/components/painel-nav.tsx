@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const links = [
   { href: "/painel", label: "Visão geral" },
@@ -11,11 +12,26 @@ const links = [
 export function PainelNav({
   adminName,
   simulated,
+  viaPassword,
 }: {
   adminName: string;
   simulated: boolean;
+  viaPassword?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  async function logout() {
+    setPending(true);
+    try {
+      await fetch("/api/logout", { method: "POST" });
+      router.push("/");
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <header className="border-b border-pine/10 bg-white/70 backdrop-blur">
@@ -59,12 +75,29 @@ export function PainelNav({
           })}
         </nav>
 
-        <div className="text-sm text-muted">
-          <span className="font-medium text-ink">{adminName}</span>
-          {simulated ? (
-            <span className="ml-2 text-xs uppercase tracking-wide text-amber">
-              simulado
-            </span>
+        <div className="flex items-center gap-3 text-sm text-muted">
+          <span>
+            <span className="font-medium text-ink">{adminName}</span>
+            {simulated ? (
+              <span className="ml-2 text-xs uppercase tracking-wide text-amber">
+                simulado
+              </span>
+            ) : null}
+            {viaPassword ? (
+              <span className="ml-2 text-xs uppercase tracking-wide text-moss">
+                senha
+              </span>
+            ) : null}
+          </span>
+          {viaPassword ? (
+            <button
+              type="button"
+              onClick={logout}
+              disabled={pending}
+              className="text-xs font-semibold uppercase tracking-wide text-moss hover:text-pine disabled:opacity-50"
+            >
+              Sair
+            </button>
           ) : null}
         </div>
       </div>
