@@ -18,4 +18,8 @@ O Postgres da app é provisionado automaticamente (`cursor-app.json`). Preview u
 env -u DATABASE_URL npm run dev
 ```
 
-Abra http://127.0.0.1:3000 — login Cursor simulado **ou** senha local `ctr-local`.
+Abra http://127.0.0.1:3000 — login Cursor simulado. Para testar senha do painel localmente:
+
+```bash
+CTR_PANEL_PASSWORD='sua-senha' env -u DATABASE_URL npm run dev
+```

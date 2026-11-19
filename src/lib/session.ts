@@ -5,11 +5,15 @@ export const SESSION_COOKIE = "ctr_admin_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
 
 function panelPassword(): string {
-  const fromEnv = process.env.CTR_PANEL_PASSWORD?.trim() ?? "";
-  if (fromEnv !== "") return fromEnv;
-  // Local / VM only — never used on the published host (CURSOR_APP_ID is set there).
-  if (!process.env.CURSOR_APP_ID?.trim()) return "ctr-local";
-  return "";
+  // Only from the environment / bound secret — never a shipped fallback password.
+  return process.env.CTR_PANEL_PASSWORD?.trim() ?? "";
+}
+
+export const MAX_ADMIN_NAME_LENGTH = 64;
+
+export function normalizeAdminName(raw: string): string {
+  const trimmed = raw.trim().slice(0, MAX_ADMIN_NAME_LENGTH);
+  return trimmed || "Admin";
 }
 
 function signingKey(): string {
@@ -57,7 +61,7 @@ export type PasswordSession = {
 export function createSessionToken(name: string): string | null {
   const exp = Date.now() + SESSION_TTL_MS;
   const payload = Buffer.from(
-    JSON.stringify({ name: name.trim() || "Admin", exp }),
+    JSON.stringify({ name: normalizeAdminName(name), exp }),
     "utf8",
   ).toString("base64url");
   const token = sign(payload);

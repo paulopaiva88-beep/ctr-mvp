@@ -8,6 +8,8 @@ import {
 import {
   createSessionToken,
   isPanelPasswordConfigured,
+  MAX_ADMIN_NAME_LENGTH,
+  normalizeAdminName,
   sessionCookieOptions,
   verifyPanelPassword,
 } from "../../../lib/session";
@@ -44,7 +46,13 @@ export async function POST(request: Request) {
   }
 
   const password = String(body.password ?? "");
-  const name = String(body.name ?? "Admin").trim() || "Admin";
+  const name = normalizeAdminName(String(body.name ?? "Admin"));
+  if (String(body.name ?? "").length > MAX_ADMIN_NAME_LENGTH) {
+    return jsonPrivate(
+      { error: `Nome muito longo (máx. ${MAX_ADMIN_NAME_LENGTH} caracteres).` },
+      { status: 400 },
+    );
+  }
   if (!verifyPanelPassword(password)) {
     recordLoginFailure(clientKey);
     return jsonPrivate({ error: "Senha incorreta." }, { status: 401 });
