@@ -1,5 +1,11 @@
 import { jsonPrivate } from "../../../lib/auth";
 import {
+  checkLoginAllowed,
+  clientKeyFromRequest,
+  recordLoginFailure,
+  recordLoginSuccess,
+} from "../../../lib/login-rate-limit";
+import {
   createSessionToken,
   isPanelPasswordConfigured,
   sessionCookieOptions,
@@ -16,6 +22,20 @@ export async function POST(request: Request) {
     );
   }
 
+  const clientKey = clientKeyFromRequest(request);
+  const allowed = checkLoginAllowed(clientKey);
+  if (!allowed.ok) {
+    return jsonPrivate(
+      {
+        error: `Muitas tentativas. Aguarde ${allowed.retryAfterSec}s e tente de novo.`,
+      },
+      {
+        status: 429,
+        headers: { "retry-after": String(allowed.retryAfterSec) },
+      },
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -26,6 +46,7 @@ export async function POST(request: Request) {
   const password = String(body.password ?? "");
   const name = String(body.name ?? "Admin").trim() || "Admin";
   if (!verifyPanelPassword(password)) {
+    recordLoginFailure(clientKey);
     return jsonPrivate({ error: "Senha incorreta." }, { status: 401 });
   }
 
@@ -34,6 +55,7 @@ export async function POST(request: Request) {
     return jsonPrivate({ error: "Não foi possível criar a sessão." }, { status: 500 });
   }
 
+  recordLoginSuccess(clientKey);
   const response = jsonPrivate({ ok: true, name });
   response.headers.append(
     "set-cookie",
